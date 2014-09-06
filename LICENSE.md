@@ -1,6 +1,8 @@
 The MIT License (MIT)
 
-Copyright (c) 2014 chasonr
+Copyright (c) 2014 Ray Chason.
+Test suite (mruby-bignum/test/bignum.rb) copyright (c) 2014 Ruby developers
+and Ray Chason.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
