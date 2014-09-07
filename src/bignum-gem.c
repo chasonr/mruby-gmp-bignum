@@ -2897,9 +2897,12 @@ string_to_int(mrb_state *mrb, mrb_value self, mrb_bool fixnum_conv)
   end = p + str_len;
   /* Skip initial whitespace */
   for (; p < end && isspace(*p); ++p) {}
-  /* Include the sign */
+  /* Include or skip the sign */
   if (p < end && (*p == '+' || *p == '-')) {
-    *(q++) = *(p++);
+    if (*p == '-') {
+      *(q++) = '-';
+    }
+    ++p;
   }
   /* Process any prefix */
   if (p+1 < end && *p == '0') {
