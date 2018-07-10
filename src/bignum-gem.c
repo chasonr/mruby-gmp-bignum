@@ -329,6 +329,34 @@ fixnum_cmp(mrb_state *mrb, mrb_value self)
   return mrb_fixnum_value(cmp);
 }
 
+static mrb_value
+fixnum_lt(mrb_state *mrb, mrb_value self)
+{
+  mrb_value cmp = fixnum_cmp(mrb, self);
+  return mrb_bool_value(mrb_fixnum(cmp) < 0);
+}
+
+static mrb_value
+fixnum_le(mrb_state *mrb, mrb_value self)
+{
+  mrb_value cmp = fixnum_cmp(mrb, self);
+  return mrb_bool_value(mrb_fixnum(cmp) <= 0);
+}
+
+static mrb_value
+fixnum_gt(mrb_state *mrb, mrb_value self)
+{
+  mrb_value cmp = fixnum_cmp(mrb, self);
+  return mrb_bool_value(mrb_fixnum(cmp) > 0);
+}
+
+static mrb_value
+fixnum_ge(mrb_state *mrb, mrb_value self)
+{
+  mrb_value cmp = fixnum_cmp(mrb, self);
+  return mrb_bool_value(mrb_fixnum(cmp) >= 0);
+}
+
 /* 15.2.8.3.1  Bignum#<=> */
 static mrb_value
 bignum_cmp(mrb_state *mrb, mrb_value self)
@@ -352,6 +380,34 @@ bignum_cmp(mrb_state *mrb, mrb_value self)
   }
 
   return mrb_fixnum_value(cmp);
+}
+
+static mrb_value
+bignum_lt(mrb_state *mrb, mrb_value self)
+{
+  mrb_value cmp = bignum_cmp(mrb, self);
+  return mrb_bool_value(mrb_fixnum(cmp) < 0);
+}
+
+static mrb_value
+bignum_le(mrb_state *mrb, mrb_value self)
+{
+  mrb_value cmp = bignum_cmp(mrb, self);
+  return mrb_bool_value(mrb_fixnum(cmp) <= 0);
+}
+
+static mrb_value
+bignum_gt(mrb_state *mrb, mrb_value self)
+{
+  mrb_value cmp = bignum_cmp(mrb, self);
+  return mrb_bool_value(mrb_fixnum(cmp) > 0);
+}
+
+static mrb_value
+bignum_ge(mrb_state *mrb, mrb_value self)
+{
+  mrb_value cmp = bignum_cmp(mrb, self);
+  return mrb_bool_value(mrb_fixnum(cmp) >= 0);
 }
 
 /* 15.2.8.3.1  Float#<=> */
@@ -403,6 +459,34 @@ float_cmp(mrb_state *mrb, mrb_value self)
   }
 
   return mrb_fixnum_value(cmp);
+}
+
+static mrb_value
+float_lt(mrb_state *mrb, mrb_value self)
+{
+  mrb_value cmp = float_cmp(mrb, self);
+  return mrb_bool_value(mrb_fixnum(cmp) < 0);
+}
+
+static mrb_value
+float_le(mrb_state *mrb, mrb_value self)
+{
+  mrb_value cmp = float_cmp(mrb, self);
+  return mrb_bool_value(mrb_fixnum(cmp) <= 0);
+}
+
+static mrb_value
+float_gt(mrb_state *mrb, mrb_value self)
+{
+  mrb_value cmp = float_cmp(mrb, self);
+  return mrb_bool_value(mrb_fixnum(cmp) > 0);
+}
+
+static mrb_value
+float_ge(mrb_state *mrb, mrb_value self)
+{
+  mrb_value cmp = float_cmp(mrb, self);
+  return mrb_bool_value(mrb_fixnum(cmp) >= 0);
 }
 
 /* ------------------------------------------------------------------------*/
@@ -3126,6 +3210,10 @@ mrb_mruby_gmp_bignum_gem_init(mrb_state *mrb)
 
   /* Redefined Fixnum methods */
   mrb_define_method(mrb, fixnum, "<=>",      fixnum_cmp,    MRB_ARGS_REQ(1)); /* 15.2.9.3.6  */
+  mrb_define_method(mrb, fixnum, "<",        fixnum_lt,     MRB_ARGS_REQ(1));
+  mrb_define_method(mrb, fixnum, "<=",       fixnum_le,     MRB_ARGS_REQ(1));
+  mrb_define_method(mrb, fixnum, ">",        fixnum_gt,     MRB_ARGS_REQ(1));
+  mrb_define_method(mrb, fixnum, ">=",       fixnum_ge,     MRB_ARGS_REQ(1));
   mrb_define_method(mrb, fixnum, "==",       fixnum_eq,     MRB_ARGS_REQ(1)); /* 15.2.8.3.7  */
   mrb_define_method(mrb, fixnum, "+",        fixnum_plus,   MRB_ARGS_REQ(1)); /* 15.2.8.3.1  */
   mrb_define_method(mrb, fixnum, "-",        fixnum_minus,  MRB_ARGS_REQ(1)); /* 15.2.8.3.2  */
@@ -3147,6 +3235,10 @@ mrb_mruby_gmp_bignum_gem_init(mrb_state *mrb)
 
   /* Bignum methods */
   mrb_define_method(mrb, bignum, "<=>",      bignum_cmp,    MRB_ARGS_REQ(1)); /* 15.2.9.3.6  */
+  mrb_define_method(mrb, bignum, "<",        bignum_lt,     MRB_ARGS_REQ(1));
+  mrb_define_method(mrb, bignum, "<=",       bignum_le,     MRB_ARGS_REQ(1));
+  mrb_define_method(mrb, bignum, ">",        bignum_gt,     MRB_ARGS_REQ(1));
+  mrb_define_method(mrb, bignum, ">=",       bignum_ge,     MRB_ARGS_REQ(1));
   mrb_define_method(mrb, bignum, "==",       bignum_eq,     MRB_ARGS_REQ(1)); /* 15.2.8.3.7  */
   mrb_define_method(mrb, bignum, "+",        bignum_plus,   MRB_ARGS_REQ(1)); /* 15.2.8.3.1  */
   mrb_define_method(mrb, bignum, "-",        bignum_minus,  MRB_ARGS_REQ(1)); /* 15.2.8.3.2  */
@@ -3173,6 +3265,10 @@ mrb_mruby_gmp_bignum_gem_init(mrb_state *mrb)
 
   /* Redefined Float methods */
   mrb_define_method(mrb, rfloat, "<=>",      float_cmp,     MRB_ARGS_REQ(1)); /* 15.2.9.3.1  */
+  mrb_define_method(mrb, rfloat, "<",        float_lt,      MRB_ARGS_REQ(1));
+  mrb_define_method(mrb, rfloat, "<=",       float_le,      MRB_ARGS_REQ(1));
+  mrb_define_method(mrb, rfloat, ">",        float_gt,      MRB_ARGS_REQ(1));
+  mrb_define_method(mrb, rfloat, ">=",       float_ge,      MRB_ARGS_REQ(1));
   mrb_define_method(mrb, rfloat, "==",       float_eq,      MRB_ARGS_REQ(1)); /* 15.2.9.3.2  */
   mrb_define_method(mrb, rfloat, "+",        float_plus,    MRB_ARGS_REQ(1)); /* 15.2.9.3.3  */
   mrb_define_method(mrb, rfloat, "-",        float_minus,   MRB_ARGS_REQ(1)); /* 15.2.9.3.4  */
