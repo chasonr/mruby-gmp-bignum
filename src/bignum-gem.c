@@ -92,10 +92,16 @@ uint64_to_bignum(mpz_t big, uint64_t fix)
 static void
 int64_to_bignum(mpz_t big, int64_t fix)
 {
-  /* Not fix >> 32; right shift of signed integer has unspecified results */
-  mpz_set_si(big, fix/0x100000000);
-  mpz_mul_2exp(big, big, 32);
-  mpz_add_ui(big, big, (unsigned long)fix & 0xFFFFFFFF);
+  if (fix < 0) {
+    mpz_set_ui(big, -fix >> 32);
+    mpz_mul_2exp(big, big, 32);
+    mpz_add_ui(big, big, (unsigned long)-fix & 0xFFFFFFFF);
+    mpz_neg(big, big);
+  } else {
+    mpz_set_ui(big, +fix >> 32);
+    mpz_mul_2exp(big, big, 32);
+    mpz_add_ui(big, big, (unsigned long)+fix & 0xFFFFFFFF);
+  }
 }
 
 /* Convert a Bignum to int64_t; return INT64_MIN if not possible */
