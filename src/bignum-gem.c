@@ -2831,10 +2831,19 @@ static mrb_value
 bignum_hash(mrb_state *mrb, mrb_value self)
 {
   size_t count;
-  uint32_t *digits = mpz_export(NULL, &count, -1, sizeof(uint32_t), 0, 0, MPZ(self));
+  uint32_t *digits;
   mrb_uint key = 0;
   size_t i, j;
+  mrb_value fix;
 
+  /* If the Bignum is within Fixnum range, return the Fixnum hash */
+  fix = bignum_to_fixnum(MPZ(self));
+  if (mrb_fixnum_p(fix)) {
+    return mrb_funcall(mrb, fix, "hash", 0);
+  }
+
+  /* Otherwise, compute the hash based on the Bignum digits */
+  digits = mpz_export(NULL, &count, -1, sizeof(uint32_t), 0, 0, MPZ(self));
   for (i = 0; i < count; ++i) {
     uint32_t digit = digits[i];
     for (j = 0; j < sizeof(uint32_t); ++j) {
