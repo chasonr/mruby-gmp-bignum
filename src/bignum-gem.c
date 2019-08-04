@@ -3004,27 +3004,28 @@ string_to_int(mrb_state *mrb, mrb_value self, mrb_bool fixnum_conv)
     ++p;
   }
   /* Process any prefix */
-  if (p+1 < end && *p == '0') {
+  if (p+2 < end && *p == '0') {
+    unsigned pbase = 0;
     switch (p[1]) {
     case 'b':  case 'B':
-      base = 2;
-      p += 2;
+      pbase = 2;
       break;
 
     case 'o':  case 'O':
-      base = 8;
-      p += 2;
+      pbase = 8;
       break;
 
     case 'd':  case 'D':
-      base = 10;
-      p += 2;
+      pbase = 10;
       break;
 
     case 'x':  case 'X':
-      base = 16;
-      p += 2;
+      pbase = 16;
       break;
+    }
+    if (pbase != 0 && (base == 0 || base == pbase)) {
+      base = pbase;
+      p += 2;
     }
   }
   else if (p < end && *p == '0' && base == 0) {
