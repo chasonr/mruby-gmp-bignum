@@ -3,7 +3,11 @@
 #include <mruby.h>
 #include <ctype.h>
 #include <limits.h>
-#ifndef MRB_WITHOUT_FLOAT
+#if MRUBY_RELEASE_MAJOR < 3 && defined(MRB_WITHOUT_FLOAT)
+#undef MRB_NO_FLOAT
+#define MRB_NO_FLOAT 1
+#endif
+#ifndef MRB_NO_FLOAT
 #include <math.h>
 #endif
 #include <stdint.h>
@@ -13,6 +17,15 @@
 #include <mruby/data.h>
 #include <mruby/string.h>
 #include "gmp.h"
+
+/* Fixnum properties in mruby 2 versus 3 */
+#if MRUBY_RELEASE_MAJOR < 3
+# undef MRB_FIXNUM_MIN
+# undef MRB_FIXNUM_MAX
+# define MRB_FIXNUM_MIN MRB_INT_MIN
+# define MRB_FIXNUM_MAX MRB_INT_MAX
+# define mrb_integer(x) mrb_fixnum(x)
+#endif
 
 /* Enable default conversion to Fixnum if this is true */
 #ifdef MRB_BIGNUM_INTEGRATION
@@ -30,7 +43,7 @@
 #endif
 
 /* For the math functions */
-#ifndef MRB_WITHOUT_FLOAT
+#ifndef MRB_NO_FLOAT
 #ifdef MRB_USE_FLOAT
 # define F(x) x##f
 #else
@@ -72,7 +85,7 @@ num_identify(mrb_state *mrb, mrb_value obj)
   switch (mrb_type(obj)) {
   case MRB_TT_FIXNUM:
     return num_fixnum;
-#ifndef MRB_WITHOUT_FLOAT
+#ifndef MRB_NO_FLOAT
   case MRB_TT_FLOAT:
     return num_float;
 #endif
@@ -166,7 +179,7 @@ bignum_to_fixnum(mpz_t num)
   /* Quick conversion for numbers fitting in signed long */
   if (mpz_fits_slong_p(num)) {
     long fix = mpz_get_si(num);
-    if (MRB_INT_MIN <= fix && fix <= MRB_INT_MAX) {
+    if (MRB_FIXNUM_MIN <= fix && fix <= MRB_FIXNUM_MAX) {
       return mrb_fixnum_value((mrb_int)fix);
     }
     else {
@@ -175,7 +188,7 @@ bignum_to_fixnum(mpz_t num)
     }
   }
 
-#if MRB_INT_MIN < LONG_MIN || LONG_MAX < MRB_INT_MAX
+#if MRB_FIXNUM_MIN < LONG_MIN || LONG_MAX < MRB_FIXNUM_MAX
   /* Check for number outside of bignum limits */
   /* TODO:  always fails if mrb_int is at least as large as long */
   {
@@ -272,7 +285,7 @@ cmp_coerce(mrb_state *mrb, mrb_value self, mrb_value other)
 static int
 big_fix_cmp(mrb_state *mrb, mrb_value left, mrb_int right)
 {
-#if MRB_INT_MIN < LONG_MIN || LONG_MAX < MRB_INT_MAX
+#if MRB_FIXNUM_MIN < LONG_MIN || LONG_MAX < MRB_FIXNUM_MAX
   if (right < LONG_MIN || LONG_MAX < right) {
     /* Use this if the Fixnum won't fit in signed long */
     int cmp;
@@ -289,7 +302,7 @@ big_fix_cmp(mrb_state *mrb, mrb_value left, mrb_int right)
   return mpz_cmp_si(MPZ(left), (long)right);
 }
 
-#ifndef MRB_WITHOUT_FLOAT
+#ifndef MRB_NO_FLOAT
 /* Fixnum <=> Float */
 static int
 cmp_fix_flt(mrb_state *mrb, mrb_int left, mrb_float right)
@@ -311,7 +324,7 @@ static mrb_value
 fixnum_cmp(mrb_state *mrb, mrb_value self)
 {
   mrb_value other;
-  mrb_int fixself = mrb_fixnum(self);
+  mrb_int fixself = mrb_integer(self);
   int cmp;
 
   mrb_get_args(mrb, "o", &other);
@@ -320,7 +333,7 @@ fixnum_cmp(mrb_state *mrb, mrb_value self)
   case num_fixnum:
     /* Fixnum <=> Fixnum */
     {
-      mrb_int fixother = mrb_fixnum(other);
+      mrb_int fixother = mrb_integer(other);
       if (fixself < fixother) {
         cmp = -1;
       }
@@ -347,28 +360,28 @@ static mrb_value
 fixnum_lt(mrb_state *mrb, mrb_value self)
 {
   mrb_value cmp = fixnum_cmp(mrb, self);
-  return mrb_bool_value(mrb_fixnum(cmp) < 0);
+  return mrb_bool_value(mrb_integer(cmp) < 0);
 }
 
 static mrb_value
 fixnum_le(mrb_state *mrb, mrb_value self)
 {
   mrb_value cmp = fixnum_cmp(mrb, self);
-  return mrb_bool_value(mrb_fixnum(cmp) <= 0);
+  return mrb_bool_value(mrb_integer(cmp) <= 0);
 }
 
 static mrb_value
 fixnum_gt(mrb_state *mrb, mrb_value self)
 {
   mrb_value cmp = fixnum_cmp(mrb, self);
-  return mrb_bool_value(mrb_fixnum(cmp) > 0);
+  return mrb_bool_value(mrb_integer(cmp) > 0);
 }
 
 static mrb_value
 fixnum_ge(mrb_state *mrb, mrb_value self)
 {
   mrb_value cmp = fixnum_cmp(mrb, self);
-  return mrb_bool_value(mrb_fixnum(cmp) >= 0);
+  return mrb_bool_value(mrb_integer(cmp) >= 0);
 }
 
 /* 15.2.8.3.1  Bignum#<=> */
@@ -383,7 +396,7 @@ bignum_cmp(mrb_state *mrb, mrb_value self)
   switch (num_identify(mrb, other)) {
   case num_fixnum:
     /* Bignum <=> Fixnum */
-    cmp = +big_fix_cmp(mrb, self, mrb_fixnum(other));
+    cmp = +big_fix_cmp(mrb, self, mrb_integer(other));
     break;
   case num_bignum:
     /* Bignum <=> Bignum */
@@ -400,31 +413,31 @@ static mrb_value
 bignum_lt(mrb_state *mrb, mrb_value self)
 {
   mrb_value cmp = bignum_cmp(mrb, self);
-  return mrb_bool_value(mrb_fixnum(cmp) < 0);
+  return mrb_bool_value(mrb_integer(cmp) < 0);
 }
 
 static mrb_value
 bignum_le(mrb_state *mrb, mrb_value self)
 {
   mrb_value cmp = bignum_cmp(mrb, self);
-  return mrb_bool_value(mrb_fixnum(cmp) <= 0);
+  return mrb_bool_value(mrb_integer(cmp) <= 0);
 }
 
 static mrb_value
 bignum_gt(mrb_state *mrb, mrb_value self)
 {
   mrb_value cmp = bignum_cmp(mrb, self);
-  return mrb_bool_value(mrb_fixnum(cmp) > 0);
+  return mrb_bool_value(mrb_integer(cmp) > 0);
 }
 
 static mrb_value
 bignum_ge(mrb_state *mrb, mrb_value self)
 {
   mrb_value cmp = bignum_cmp(mrb, self);
-  return mrb_bool_value(mrb_fixnum(cmp) >= 0);
+  return mrb_bool_value(mrb_integer(cmp) >= 0);
 }
 
-#ifndef MRB_WITHOUT_FLOAT
+#ifndef MRB_NO_FLOAT
 /* 15.2.8.3.1  Float#<=> */
 static mrb_value
 float_cmp(mrb_state *mrb, mrb_value self)
@@ -443,7 +456,7 @@ float_cmp(mrb_state *mrb, mrb_value self)
   case num_fixnum:
     /* Float <=> Fixnum */
     {
-      mrb_float fixother = mrb_fixnum(other);
+      mrb_float fixother = mrb_integer(other);
       cmp = -cmp_fix_flt(mrb, fixother, fltself);
     }
     break;
@@ -480,28 +493,28 @@ static mrb_value
 float_lt(mrb_state *mrb, mrb_value self)
 {
   mrb_value cmp = float_cmp(mrb, self);
-  return mrb_bool_value(mrb_fixnum(cmp) < 0);
+  return mrb_bool_value(mrb_integer(cmp) < 0);
 }
 
 static mrb_value
 float_le(mrb_state *mrb, mrb_value self)
 {
   mrb_value cmp = float_cmp(mrb, self);
-  return mrb_bool_value(mrb_fixnum(cmp) <= 0);
+  return mrb_bool_value(mrb_integer(cmp) <= 0);
 }
 
 static mrb_value
 float_gt(mrb_state *mrb, mrb_value self)
 {
   mrb_value cmp = float_cmp(mrb, self);
-  return mrb_bool_value(mrb_fixnum(cmp) > 0);
+  return mrb_bool_value(mrb_integer(cmp) > 0);
 }
 
 static mrb_value
 float_ge(mrb_state *mrb, mrb_value self)
 {
   mrb_value cmp = float_cmp(mrb, self);
-  return mrb_bool_value(mrb_fixnum(cmp) >= 0);
+  return mrb_bool_value(mrb_integer(cmp) >= 0);
 }
 #endif
 
@@ -514,7 +527,7 @@ static mrb_value
 fixnum_eq(mrb_state *mrb, mrb_value self)
 {
   mrb_value other;
-  mrb_int fixself = mrb_fixnum(self);
+  mrb_int fixself = mrb_integer(self);
   mrb_bool eq;
 
   mrb_get_args(mrb, "o", &other);
@@ -522,7 +535,7 @@ fixnum_eq(mrb_state *mrb, mrb_value self)
   switch (num_identify(mrb, other)) {
   case num_fixnum:
     /* Fixnum == Fixnum */
-    eq = fixself == mrb_fixnum(other);
+    eq = fixself == mrb_integer(other);
     break;
   case num_bignum:
     /* Fixnum == Bignum */
@@ -547,7 +560,7 @@ bignum_eq(mrb_state *mrb, mrb_value self)
   switch (num_identify(mrb, other)) {
   case num_fixnum:
     /* Bignum == Fixnum */
-    eq = big_fix_cmp(mrb, self, mrb_fixnum(other)) == 0;
+    eq = big_fix_cmp(mrb, self, mrb_integer(other)) == 0;
     break;
   case num_bignum:
     /* Bignum == Bignum */
@@ -560,7 +573,7 @@ bignum_eq(mrb_state *mrb, mrb_value self)
   return mrb_bool_value(eq);
 }
 
-#ifndef MRB_WITHOUT_FLOAT
+#ifndef MRB_NO_FLOAT
 /* 15.2.9.3.2  Float#== */
 static mrb_value
 float_eq(mrb_state *mrb, mrb_value self)
@@ -574,7 +587,7 @@ float_eq(mrb_state *mrb, mrb_value self)
   switch (num_identify(mrb, other)) {
   case num_fixnum:
     /* Float == Fixnum */
-    eq = fltself == mrb_fixnum(other);
+    eq = fltself == mrb_integer(other);
     break;
   case num_bignum:
     /* Float == Bignum */
@@ -634,7 +647,7 @@ fix_fix_plus(mrb_state *mrb, mrb_int x, mrb_int y, mrb_bool subtract)
      of avoiding overflow altogether, except in one single corner case; and
      even that does not occur if word boxing is enabled, because that narrows
      Fixnum by one bit without changing the mrb_uint type. */
-  if (!subtract && x == MRB_INT_MIN && y == MRB_INT_MIN) {
+  if (!subtract && x == MRB_FIXNUM_MIN && y == MRB_FIXNUM_MIN) {
     mpz_t bsum;
     mpz_init_set_si(bsum, -1);
     mpz_mul_2exp(bsum, bsum, MRB_INT_BIT);
@@ -665,8 +678,8 @@ fix_fix_plus(mrb_state *mrb, mrb_int x, mrb_int y, mrb_bool subtract)
     }
   }
   /* Propagate carry */
-  if (( ssum && usum > (mrb_uint)MRB_INT_MAX+1)
-  ||  (!ssum && usum > (mrb_uint)MRB_INT_MAX+0)) {
+  if (( ssum && usum > (mrb_uint)MRB_FIXNUM_MAX+1)
+  ||  (!ssum && usum > (mrb_uint)MRB_FIXNUM_MAX+0)) {
     /* Overflow; return a Bignum */
     mpz_t bsum;
     mpz_init(bsum);
@@ -693,7 +706,7 @@ big_fix_plus(mrb_state *mrb, mrb_value left, mrb_int right)
 
   mpz_init(sum);
 
-#if MRB_INT_MIN < LONG_MIN || LONG_MAX < MRB_INT_MAX
+#if MRB_FIXNUM_MIN < LONG_MIN || LONG_MAX < MRB_FIXNUM_MAX
   if (right < LONG_MIN || LONG_MAX < right) {
     /* Use this if the Fixnum won't fit in signed long */
     mpz_t bigright;
@@ -738,7 +751,7 @@ static mrb_value
 fixnum_plus(mrb_state *mrb, mrb_value self)
 {
   mrb_value other;
-  mrb_int fixself = mrb_fixnum(self);
+  mrb_int fixself = mrb_integer(self);
   mrb_value out;
 
   mrb_get_args(mrb, "o", &other);
@@ -746,13 +759,13 @@ fixnum_plus(mrb_state *mrb, mrb_value self)
   switch (num_identify(mrb, other)) {
   case num_fixnum:
     /* Fixnum + Fixnum */
-    out = fix_fix_plus(mrb, fixself, mrb_fixnum(other), FALSE);
+    out = fix_fix_plus(mrb, fixself, mrb_integer(other), FALSE);
     break;
   case num_bignum:
     /* Fixnum + Bignum */
     out = big_fix_plus(mrb, other, fixself);
     break;
-#ifndef MRB_WITHOUT_FLOAT
+#ifndef MRB_NO_FLOAT
   case num_float:
     /* Fixnum + Float */
     out = mrb_float_value(mrb, fixself + mrb_float(other));
@@ -778,13 +791,13 @@ bignum_plus(mrb_state *mrb, mrb_value self)
   switch (num_identify(mrb, other)) {
   case num_fixnum:
     /* Bignum + Fixnum */
-    out = big_fix_plus(mrb, self, mrb_fixnum(other));
+    out = big_fix_plus(mrb, self, mrb_integer(other));
     break;
   case num_bignum:
     /* Bignum + Bignum */
     out = big_big_plus(mrb, self, other);
     break;
-#ifndef MRB_WITHOUT_FLOAT
+#ifndef MRB_NO_FLOAT
   case num_float:
     /* Bignum + Float */
     out = mrb_float_value(mrb, mpz_get_d(MPZ(self)) + mrb_float(other));
@@ -798,7 +811,7 @@ bignum_plus(mrb_state *mrb, mrb_value self)
   return out;
 }
 
-#ifndef MRB_WITHOUT_FLOAT
+#ifndef MRB_NO_FLOAT
 /* 15.2.9.3.3  Float#+ */
 static mrb_value
 float_plus(mrb_state *mrb, mrb_value self)
@@ -812,7 +825,7 @@ float_plus(mrb_state *mrb, mrb_value self)
   switch (num_identify(mrb, other)) {
   case num_fixnum:
     /* Float + Fixnum */
-    out = mrb_float_value(mrb, fltself + mrb_fixnum(other));
+    out = mrb_float_value(mrb, fltself + mrb_integer(other));
     break;
   case num_bignum:
     /* Float + Bignum */
@@ -871,7 +884,7 @@ big_fix_minus(mrb_state *mrb, mrb_value left, mrb_int right)
 
   mpz_init(sum);
 
-#if MRB_INT_MIN < LONG_MIN || LONG_MAX < MRB_INT_MAX
+#if MRB_FIXNUM_MIN < LONG_MIN || LONG_MAX < MRB_FIXNUM_MAX
   if (right < LONG_MIN || LONG_MAX < right) {
     /* Use this if the Fixnum won't fit in signed long */
     mpz_t bigright;
@@ -916,7 +929,7 @@ static mrb_value
 fixnum_minus(mrb_state *mrb, mrb_value self)
 {
   mrb_value other;
-  mrb_int fixself = mrb_fixnum(self);
+  mrb_int fixself = mrb_integer(self);
   mrb_value out;
 
   mrb_get_args(mrb, "o", &other);
@@ -924,13 +937,13 @@ fixnum_minus(mrb_state *mrb, mrb_value self)
   switch (num_identify(mrb, other)) {
   case num_fixnum:
     /* Fixnum - Fixnum */
-    out = fix_fix_plus(mrb, fixself, mrb_fixnum(other), TRUE);
+    out = fix_fix_plus(mrb, fixself, mrb_integer(other), TRUE);
     break;
   case num_bignum:
     /* Fixnum - Bignum */
     out = fix_big_minus(mrb, fixself, other);
     break;
-#ifndef MRB_WITHOUT_FLOAT
+#ifndef MRB_NO_FLOAT
   case num_float:
     /* Fixnum - Float */
     out = mrb_float_value(mrb, fixself - mrb_float(other));
@@ -956,13 +969,13 @@ bignum_minus(mrb_state *mrb, mrb_value self)
   switch (num_identify(mrb, other)) {
   case num_fixnum:
     /* Bignum - Fixnum */
-    out = big_fix_minus(mrb, self, mrb_fixnum(other));
+    out = big_fix_minus(mrb, self, mrb_integer(other));
     break;
   case num_bignum:
     /* Bignum - Bignum */
     out = big_big_minus(mrb, self, other);
     break;
-#ifndef MRB_WITHOUT_FLOAT
+#ifndef MRB_NO_FLOAT
   case num_float:
     /* Bignum - Float */
     out = mrb_float_value(mrb, mpz_get_d(MPZ(self)) - mrb_float(other));
@@ -976,7 +989,7 @@ bignum_minus(mrb_state *mrb, mrb_value self)
   return out;
 }
 
-#ifndef MRB_WITHOUT_FLOAT
+#ifndef MRB_NO_FLOAT
 /* 15.2.9.3.4  Float#- */
 static mrb_value
 float_minus(mrb_state *mrb, mrb_value self)
@@ -990,7 +1003,7 @@ float_minus(mrb_state *mrb, mrb_value self)
   switch (num_identify(mrb, other)) {
   case num_fixnum:
     /* Float - Fixnum */
-    out = mrb_float_value(mrb, fltself - mrb_fixnum(other));
+    out = mrb_float_value(mrb, fltself - mrb_integer(other));
     break;
   case num_bignum:
     /* Float - Bignum */
@@ -1066,7 +1079,7 @@ big_fix_mul(mrb_state *mrb, mrb_value left, mrb_int right)
 
   mpz_init(prod);
 
-#if MRB_INT_MIN < LONG_MIN || LONG_MAX < MRB_INT_MAX
+#if MRB_FIXNUM_MIN < LONG_MIN || LONG_MAX < MRB_FIXNUM_MAX
   if (right < LONG_MIN || LONG_MAX < right) {
     /* Use this if the Fixnum won't fit in signed long */
     mpz_t bigright;
@@ -1108,7 +1121,7 @@ static mrb_value
 fixnum_mul(mrb_state *mrb, mrb_value self)
 {
   mrb_value other;
-  mrb_int fixself = mrb_fixnum(self);
+  mrb_int fixself = mrb_integer(self);
   mrb_value out;
 
   mrb_get_args(mrb, "o", &other);
@@ -1116,13 +1129,13 @@ fixnum_mul(mrb_state *mrb, mrb_value self)
   switch (num_identify(mrb, other)) {
   case num_fixnum:
     /* Fixnum * Fixnum */
-    out = fix_fix_mul(mrb, fixself, mrb_fixnum(other));
+    out = fix_fix_mul(mrb, fixself, mrb_integer(other));
     break;
   case num_bignum:
     /* Fixnum * Bignum */
     out = big_fix_mul(mrb, other, fixself);
     break;
-#ifndef MRB_WITHOUT_FLOAT
+#ifndef MRB_NO_FLOAT
   case num_float:
     /* Fixnum * Float */
     out = mrb_float_value(mrb, fixself * mrb_float(other));
@@ -1148,13 +1161,13 @@ bignum_mul(mrb_state *mrb, mrb_value self)
   switch (num_identify(mrb, other)) {
   case num_fixnum:
     /* Bignum * Fixnum */
-    out = big_fix_mul(mrb, self, mrb_fixnum(other));
+    out = big_fix_mul(mrb, self, mrb_integer(other));
     break;
   case num_bignum:
     /* Bignum * Bignum */
     out = big_big_mul(mrb, self, other);
     break;
-#ifndef MRB_WITHOUT_FLOAT
+#ifndef MRB_NO_FLOAT
   case num_float:
     /* Bignum * Float */
     out = mrb_float_value(mrb, mpz_get_d(MPZ(self)) * mrb_float(other));
@@ -1168,7 +1181,7 @@ bignum_mul(mrb_state *mrb, mrb_value self)
   return out;
 }
 
-#ifndef MRB_WITHOUT_FLOAT
+#ifndef MRB_NO_FLOAT
 /* 15.2.9.3.5  Float#* */
 static mrb_value
 float_mul(mrb_state *mrb, mrb_value self)
@@ -1182,7 +1195,7 @@ float_mul(mrb_state *mrb, mrb_value self)
   switch (num_identify(mrb, other)) {
   case num_fixnum:
     /* Float * Fixnum */
-    out = mrb_float_value(mrb, fltself * mrb_fixnum(other));
+    out = mrb_float_value(mrb, fltself * mrb_integer(other));
     break;
   case num_bignum:
     /* Float * Bignum */
@@ -1216,7 +1229,7 @@ fix_fix_div(mrb_state *mrb, mrb_int x, mrb_int y)
   }
 
   /* This is the only way that division of Fixnums can overflow */
-  if (x == MRB_INT_MIN && y == -1) {
+  if (x == MRB_FIXNUM_MIN && y == -1) {
     mpz_t quo;
     mrb_value out;
 
@@ -1305,7 +1318,7 @@ static mrb_value
 fixnum_div(mrb_state *mrb, mrb_value self)
 {
   mrb_value other;
-  mrb_int fixself = mrb_fixnum(self);
+  mrb_int fixself = mrb_integer(self);
   mrb_value out;
 
   mrb_get_args(mrb, "o", &other);
@@ -1313,7 +1326,7 @@ fixnum_div(mrb_state *mrb, mrb_value self)
   switch (num_identify(mrb, other)) {
   case num_fixnum:
     /* Fixnum / Fixnum */
-    out = fix_fix_div(mrb, fixself, mrb_fixnum(other));
+    out = fix_fix_div(mrb, fixself, mrb_integer(other));
     break;
   case num_bignum:
     /* Fixnum / Bignum */
@@ -1339,7 +1352,7 @@ bignum_div(mrb_state *mrb, mrb_value self)
   switch (num_identify(mrb, other)) {
   case num_fixnum:
     /* Bignum / Fixnum */
-    out = big_fix_div(mrb, self, mrb_fixnum(other));
+    out = big_fix_div(mrb, self, mrb_integer(other));
     break;
   case num_bignum:
     /* Bignum / Bignum */
@@ -1353,7 +1366,7 @@ bignum_div(mrb_state *mrb, mrb_value self)
   return out;
 }
 
-#ifndef MRB_WITHOUT_FLOAT
+#ifndef MRB_NO_FLOAT
 /* 15.2.8.3.6  Integer#/ */
 static mrb_value
 float_div(mrb_state *mrb, mrb_value self)
@@ -1367,7 +1380,7 @@ float_div(mrb_state *mrb, mrb_value self)
   switch (num_identify(mrb, other)) {
   case num_fixnum:
     /* Float / Fixnum */
-    out = mrb_float_value(mrb, fltself / mrb_fixnum(other));
+    out = mrb_float_value(mrb, fltself / mrb_integer(other));
     break;
   case num_bignum:
     /* Float / Bignum */
@@ -1478,7 +1491,7 @@ static mrb_value
 fixnum_mod(mrb_state *mrb, mrb_value self)
 {
   mrb_value other;
-  mrb_int fixself = mrb_fixnum(self);
+  mrb_int fixself = mrb_integer(self);
   mrb_value out;
 
   mrb_get_args(mrb, "o", &other);
@@ -1486,7 +1499,7 @@ fixnum_mod(mrb_state *mrb, mrb_value self)
   switch (num_identify(mrb, other)) {
   case num_fixnum:
     /* Fixnum % Fixnum */
-    out = fix_fix_mod(mrb, fixself, mrb_fixnum(other));
+    out = fix_fix_mod(mrb, fixself, mrb_integer(other));
     break;
   case num_bignum:
     /* Fixnum % Bignum */
@@ -1512,7 +1525,7 @@ bignum_mod(mrb_state *mrb, mrb_value self)
   switch (num_identify(mrb, other)) {
   case num_fixnum:
     /* Bignum % Fixnum */
-    out = big_fix_mod(mrb, self, mrb_fixnum(other));
+    out = big_fix_mod(mrb, self, mrb_integer(other));
     break;
   case num_bignum:
     /* Bignum % Bignum */
@@ -1526,7 +1539,7 @@ bignum_mod(mrb_state *mrb, mrb_value self)
   return out;
 }
 
-#ifndef MRB_WITHOUT_FLOAT
+#ifndef MRB_NO_FLOAT
 /* 15.2.9.3.7  Float#% */
 static mrb_value
 float_mod(mrb_state *mrb, mrb_value self)
@@ -1540,7 +1553,7 @@ float_mod(mrb_state *mrb, mrb_value self)
   switch (num_identify(mrb, other)) {
   case num_fixnum:
     /* Float % Fixnum */
-    out = mrb_float_value(mrb, F(fmod)(fltself, mrb_fixnum(other)));
+    out = mrb_float_value(mrb, F(fmod)(fltself, mrb_integer(other)));
     break;
   case num_bignum:
     /* Float % Bignum */
@@ -1573,7 +1586,7 @@ fix_fix_divmod(mrb_state *mrb, mrb_int x, mrb_int y)
     mrb_raise(mrb, mrb_class_get(mrb, "ZeroDivisionError"), "divided by 0");
   }
 
-  if (x == MRB_INT_MIN && y == -1) {
+  if (x == MRB_FIXNUM_MIN && y == -1) {
     /* Fixnum division overflows */
     mpz_t quo;
 
@@ -1598,7 +1611,7 @@ fix_fix_divmod(mrb_state *mrb, mrb_int x, mrb_int y)
   return mrb_ary_new_from_values(mrb, 2, out);
 }
 
-#ifndef MRB_WITHOUT_FLOAT
+#ifndef MRB_NO_FLOAT
 /* Float.divmod(Float) */
 static mrb_value
 flt_flt_divmod(mrb_state *mrb, mrb_float x, mrb_float y)
@@ -1678,7 +1691,7 @@ static mrb_value
 fixnum_divmod(mrb_state *mrb, mrb_value self)
 {
   mrb_value other;
-  mrb_int fixself = mrb_fixnum(self);
+  mrb_int fixself = mrb_integer(self);
   mrb_value out;
 
   mrb_get_args(mrb, "o", &other);
@@ -1686,13 +1699,13 @@ fixnum_divmod(mrb_state *mrb, mrb_value self)
   switch (num_identify(mrb, other)) {
   case num_fixnum:
     /* Fixnum.divmod(Fixnum) */
-    out = fix_fix_divmod(mrb, fixself, mrb_fixnum(other));
+    out = fix_fix_divmod(mrb, fixself, mrb_integer(other));
     break;
   case num_bignum:
     /* Fixnum.divmod(Bignum) */
     out = fix_big_divmod(mrb, fixself, other);
     break;
-#ifndef MRB_WITHOUT_FLOAT
+#ifndef MRB_NO_FLOAT
   case num_float:
     /* Fixnum.divmod(Float) */
     out = flt_flt_divmod(mrb, fixself, mrb_float(other));
@@ -1718,13 +1731,13 @@ bignum_divmod(mrb_state *mrb, mrb_value self)
   switch (num_identify(mrb, other)) {
   case num_fixnum:
     /* Bignum.divmod(Fixnum) */
-    out = big_fix_divmod(mrb, self, mrb_fixnum(other));
+    out = big_fix_divmod(mrb, self, mrb_integer(other));
     break;
   case num_bignum:
     /* Bignum.divmod(Bignum) */
     out = big_big_divmod(mrb, self, other);
     break;
-#ifndef MRB_WITHOUT_FLOAT
+#ifndef MRB_NO_FLOAT
   case num_float:
     /* Bignum.divmod(Float) */
     out = flt_flt_divmod(mrb, mpz_get_d(MPZ(self)), mrb_float(other));
@@ -1738,7 +1751,7 @@ bignum_divmod(mrb_state *mrb, mrb_value self)
   return out;
 }
 
-#ifndef MRB_WITHOUT_FLOAT
+#ifndef MRB_NO_FLOAT
 /* Float#divmod */
 static mrb_value
 float_divmod(mrb_state *mrb, mrb_value self)
@@ -1752,7 +1765,7 @@ float_divmod(mrb_state *mrb, mrb_value self)
   switch (num_identify(mrb, other)) {
   case num_fixnum:
     /* Float.divmod(Fixnum) */
-    out = flt_flt_divmod(mrb, fltself, mrb_fixnum(other));
+    out = flt_flt_divmod(mrb, fltself, mrb_integer(other));
     break;
   case num_bignum:
     /* Float.divmod(Bignum) */
@@ -1779,7 +1792,7 @@ float_divmod(mrb_state *mrb, mrb_value self)
    (rational for integers, float for floats).  Because this gem does not
    implement rationals, quo always returns a float. */
 
-#ifndef MRB_WITHOUT_FLOAT
+#ifndef MRB_NO_FLOAT
 static mrb_value
 quo(mrb_state *mrb, mrb_value self, mrb_float fltself)
 {
@@ -1791,7 +1804,7 @@ quo(mrb_state *mrb, mrb_value self, mrb_float fltself)
   switch (num_identify(mrb, other)) {
   case num_fixnum:
     /* Numeric.quo(Fixnum) */
-    out = mrb_float_value(mrb, fltself / mrb_fixnum(other));
+    out = mrb_float_value(mrb, fltself / mrb_integer(other));
     break;
   case num_bignum:
     /* Numeric.quo(Bignum) */
@@ -1813,7 +1826,7 @@ quo(mrb_state *mrb, mrb_value self, mrb_float fltself)
 static mrb_value
 fixnum_quo(mrb_state *mrb, mrb_value self)
 {
-  return quo(mrb, self, mrb_fixnum(self));
+  return quo(mrb, self, mrb_integer(self));
 }
 
 /* Bignum#quo */
@@ -1867,7 +1880,7 @@ big_fix_pow(mrb_state *mrb, mrb_value x, int64_t y, mrb_bool fixnum_conv)
   }
 
   if (y < 0) {
-#ifndef MRB_WITHOUT_FLOAT
+#ifndef MRB_NO_FLOAT
     return mrb_float_value(mrb, F(pow)(mpz_get_d(MPZ(x)), y));
 #else
     return mrb_fixnum_value(0);
@@ -1909,7 +1922,7 @@ fix_fix_pow(mrb_state *mrb, mrb_int x, mrb_int y)
   }
 
   if (y < 0) {
-#ifndef MRB_WITHOUT_FLOAT
+#ifndef MRB_NO_FLOAT
     return mrb_float_value(mrb, F(pow)(x, y));
 #else
     return mrb_fixnum_value(0);
@@ -1964,7 +1977,7 @@ big_big_pow(mrb_state *mrb, mrb_value x, mrb_value y, mrb_bool fixnum_conv)
   }
 
   if (ysign < 0) {
-#ifndef MRB_WITHOUT_FLOAT
+#ifndef MRB_NO_FLOAT
     out = mrb_float_value(mrb, F(pow)(mpz_get_d(MPZ(x)), mpz_get_d(MPZ(y))));
 #else
     out = mrb_fixnum_value(0);
@@ -2009,7 +2022,7 @@ fix_big_pow(mrb_state *mrb, mrb_int x, mrb_value y)
   }
 
   if (ysign < 0) {
-#ifndef MRB_WITHOUT_FLOAT
+#ifndef MRB_NO_FLOAT
     out = mrb_float_value(mrb, F(pow)(x, mpz_get_d(MPZ(y))));
 #else
     out = mrb_fixnum_value(0);
@@ -2035,7 +2048,7 @@ fix_big_pow(mrb_state *mrb, mrb_int x, mrb_value y)
 static mrb_value
 fixnum_pow(mrb_state *mrb, mrb_value self)
 {
-  mrb_int fixself = mrb_fixnum(self);
+  mrb_int fixself = mrb_integer(self);
   mrb_value other;
   mrb_value out;
 
@@ -2044,13 +2057,13 @@ fixnum_pow(mrb_state *mrb, mrb_value self)
   switch (num_identify(mrb, other)) {
   case num_fixnum:
     /* Fixnum ** Fixnum */
-    out = fix_fix_pow(mrb, fixself, mrb_fixnum(other));
+    out = fix_fix_pow(mrb, fixself, mrb_integer(other));
     break;
   case num_bignum:
     /* Fixnum ** Bignum */
     out = fix_big_pow(mrb, fixself, other);
     break;
-#ifndef MRB_WITHOUT_FLOAT
+#ifndef MRB_NO_FLOAT
   case num_float:
     /* Fixnum ** Float */
     out = mrb_float_value(mrb, F(pow)(fixself, mrb_float(other)));
@@ -2076,13 +2089,13 @@ bignum_pow(mrb_state *mrb, mrb_value self)
   switch (num_identify(mrb, other)) {
   case num_fixnum:
     /* Bignum ** Fixnum */
-    out = big_fix_pow(mrb, self, mrb_fixnum(other), FIXNUM_CONVERT);
+    out = big_fix_pow(mrb, self, mrb_integer(other), FIXNUM_CONVERT);
     break;
   case num_bignum:
     /* Bignum ** Bignum */
     out = big_big_pow(mrb, self, other, FIXNUM_CONVERT);
     break;
-#ifndef MRB_WITHOUT_FLOAT
+#ifndef MRB_NO_FLOAT
   case num_float:
     /* Bignum ** Float */
     out = mrb_float_value(mrb, F(pow)(mpz_get_d(MPZ(self)), mrb_float(other)));
@@ -2096,7 +2109,7 @@ bignum_pow(mrb_state *mrb, mrb_value self)
   return out;
 }
 
-#ifndef MRB_WITHOUT_FLOAT
+#ifndef MRB_NO_FLOAT
 /* Float#** */
 static mrb_value
 float_pow(mrb_state *mrb, mrb_value self)
@@ -2110,7 +2123,7 @@ float_pow(mrb_state *mrb, mrb_value self)
   switch (num_identify(mrb, other)) {
   case num_fixnum:
     /* Float ** Fixnum */
-    out = mrb_float_value(mrb, F(pow)(fltself, mrb_fixnum(other)));
+    out = mrb_float_value(mrb, F(pow)(fltself, mrb_integer(other)));
     break;
   case num_bignum:
     /* Float ** Bignum */
@@ -2209,7 +2222,7 @@ static mrb_value
 fixnum_and(mrb_state *mrb, mrb_value self)
 {
   mrb_value other;
-  mrb_int fixself = mrb_fixnum(self);
+  mrb_int fixself = mrb_integer(self);
   mrb_value out;
 
   mrb_get_args(mrb, "o", &other);
@@ -2217,7 +2230,7 @@ fixnum_and(mrb_state *mrb, mrb_value self)
   switch (num_identify(mrb, other)) {
   case num_fixnum:
     /* Fixnum & Fixnum */
-    out = mrb_fixnum_value(fixself & mrb_fixnum(other));
+    out = mrb_fixnum_value(fixself & mrb_integer(other));
     break;
   case num_bignum:
     /* Fixnum & Bignum */
@@ -2243,7 +2256,7 @@ bignum_and(mrb_state *mrb, mrb_value self)
   switch (num_identify(mrb, other)) {
   case num_fixnum:
     /* Bignum & Fixnum */
-    out = big_fix_and(mrb, self, mrb_fixnum(other));
+    out = big_fix_and(mrb, self, mrb_integer(other));
     break;
   case num_bignum:
     /* Bignum & Bignum */
@@ -2298,7 +2311,7 @@ static mrb_value
 fixnum_or(mrb_state *mrb, mrb_value self)
 {
   mrb_value other;
-  mrb_int fixself = mrb_fixnum(self);
+  mrb_int fixself = mrb_integer(self);
   mrb_value out;
 
   mrb_get_args(mrb, "o", &other);
@@ -2306,7 +2319,7 @@ fixnum_or(mrb_state *mrb, mrb_value self)
   switch (num_identify(mrb, other)) {
   case num_fixnum:
     /* Fixnum | Fixnum */
-    out = mrb_fixnum_value(fixself | mrb_fixnum(other));
+    out = mrb_fixnum_value(fixself | mrb_integer(other));
     break;
   case num_bignum:
     /* Fixnum | Bignum */
@@ -2332,7 +2345,7 @@ bignum_or(mrb_state *mrb, mrb_value self)
   switch (num_identify(mrb, other)) {
   case num_fixnum:
     /* Bignum | Fixnum */
-    out = big_fix_or(mrb, self, mrb_fixnum(other));
+    out = big_fix_or(mrb, self, mrb_integer(other));
     break;
   case num_bignum:
     /* Bignum | Bignum */
@@ -2387,7 +2400,7 @@ static mrb_value
 fixnum_xor(mrb_state *mrb, mrb_value self)
 {
   mrb_value other;
-  mrb_int fixself = mrb_fixnum(self);
+  mrb_int fixself = mrb_integer(self);
   mrb_value out;
 
   mrb_get_args(mrb, "o", &other);
@@ -2395,7 +2408,7 @@ fixnum_xor(mrb_state *mrb, mrb_value self)
   switch (num_identify(mrb, other)) {
   case num_fixnum:
     /* Fixnum ^ Fixnum */
-    out = mrb_fixnum_value(fixself ^ mrb_fixnum(other));
+    out = mrb_fixnum_value(fixself ^ mrb_integer(other));
     break;
   case num_bignum:
     /* Fixnum ^ Bignum */
@@ -2421,7 +2434,7 @@ bignum_xor(mrb_state *mrb, mrb_value self)
   switch (num_identify(mrb, other)) {
   case num_fixnum:
     /* Bignum ^ Fixnum */
-    out = big_fix_xor(mrb, self, mrb_fixnum(other));
+    out = big_fix_xor(mrb, self, mrb_integer(other));
     break;
   case num_bignum:
     /* Bignum ^ Bignum */
@@ -2579,7 +2592,7 @@ static mrb_value
 fixnum_lshift(mrb_state *mrb, mrb_value self)
 {
   mrb_value other;
-  mrb_int fixself = mrb_fixnum(self);
+  mrb_int fixself = mrb_integer(self);
   mrb_value out;
 
   mrb_get_args(mrb, "o", &other);
@@ -2587,7 +2600,7 @@ fixnum_lshift(mrb_state *mrb, mrb_value self)
   switch (num_identify(mrb, other)) {
   case num_fixnum:
     /* Fixnum << Fixnum */
-    out = fix_fix_lshift(mrb, fixself, mrb_fixnum(other));
+    out = fix_fix_lshift(mrb, fixself, mrb_integer(other));
     break;
   case num_bignum:
     /* Fixnum << Bignum */
@@ -2607,7 +2620,7 @@ fixnum_lshift(mrb_state *mrb, mrb_value self)
       }
     }
     break;
-#ifndef MRB_WITHOUT_FLOAT
+#ifndef MRB_NO_FLOAT
   case num_float:
     /* Fixnum << Float */
     {
@@ -2646,7 +2659,7 @@ bignum_lshift(mrb_state *mrb, mrb_value self)
   switch (num_identify(mrb, other)) {
   case num_fixnum:
     /* Bignum << Fixnum */
-    out = big_fix_lshift(mrb, self, mrb_fixnum(other));
+    out = big_fix_lshift(mrb, self, mrb_integer(other));
     break;
   case num_bignum:
     /* Bignum << Bignum */
@@ -2666,7 +2679,7 @@ bignum_lshift(mrb_state *mrb, mrb_value self)
       }
     }
     break;
-#ifndef MRB_WITHOUT_FLOAT
+#ifndef MRB_NO_FLOAT
   case num_float:
     /* Fixnum << Float */
     {
@@ -2726,7 +2739,7 @@ static mrb_value
 fixnum_rshift(mrb_state *mrb, mrb_value self)
 {
   mrb_value other;
-  mrb_int fixself = mrb_fixnum(self);
+  mrb_int fixself = mrb_integer(self);
   mrb_value out;
 
   mrb_get_args(mrb, "o", &other);
@@ -2734,7 +2747,7 @@ fixnum_rshift(mrb_state *mrb, mrb_value self)
   switch (num_identify(mrb, other)) {
   case num_fixnum:
     /* Fixnum >> Fixnum */
-    out = fix_fix_rshift(mrb, fixself, mrb_fixnum(other));
+    out = fix_fix_rshift(mrb, fixself, mrb_integer(other));
     break;
   case num_bignum:
     /* Fixnum >> Bignum */
@@ -2754,7 +2767,7 @@ fixnum_rshift(mrb_state *mrb, mrb_value self)
       }
     }
     break;
-#ifndef MRB_WITHOUT_FLOAT
+#ifndef MRB_NO_FLOAT
   case num_float:
     /* Fixnum >> Float */
     {
@@ -2793,7 +2806,7 @@ bignum_rshift(mrb_state *mrb, mrb_value self)
   switch (num_identify(mrb, other)) {
   case num_fixnum:
     /* Bignum >> Fixnum */
-    out = big_fix_rshift(mrb, self, mrb_fixnum(other));
+    out = big_fix_rshift(mrb, self, mrb_integer(other));
     break;
   case num_bignum:
     /* Bignum >> Bignum */
@@ -2813,7 +2826,7 @@ bignum_rshift(mrb_state *mrb, mrb_value self)
       }
     }
     break;
-#ifndef MRB_WITHOUT_FLOAT
+#ifndef MRB_NO_FLOAT
   case num_float:
     /* Fixnum >> Float */
     {
@@ -2856,11 +2869,11 @@ fixnum_eql(mrb_state *mrb, mrb_value self)
   switch (num_identify(mrb, other)) {
   case num_fixnum:
     /* Fixnum.eql?(Fixnum) */
-    eql = mrb_fixnum(self) == mrb_fixnum(other);
+    eql = mrb_integer(self) == mrb_integer(other);
     break;
   case num_bignum:
     /* Fixnum.eql?(Bignum) */
-    eql = big_fix_cmp(mrb, other, mrb_fixnum(self)) == 0;
+    eql = big_fix_cmp(mrb, other, mrb_integer(self)) == 0;
     break;
   default:
     eql = FALSE;
@@ -2882,7 +2895,7 @@ bignum_eql(mrb_state *mrb, mrb_value self)
   switch (num_identify(mrb, other)) {
   case num_fixnum:
     /* Bignum.eql?(Fixnum) */
-    eql = big_fix_cmp(mrb, self, mrb_fixnum(other)) == 0;
+    eql = big_fix_cmp(mrb, self, mrb_integer(other)) == 0;
     break;
   case num_bignum:
     /* Bignum.eql?(Bignum) */
@@ -2936,7 +2949,7 @@ bignum_hash(mrb_state *mrb, mrb_value self)
 /* ------------------------------------------------------------------------*/
 
 /* 15.2.8.3.23 Integer#to_f */
-#ifndef MRB_WITHOUT_FLOAT
+#ifndef MRB_NO_FLOAT
 static mrb_value
 bignum_to_f(mrb_state *mrb, mrb_value self)
 {
@@ -2973,7 +2986,7 @@ bignum_to_s(mrb_state *mrb, mrb_value self)
 /* Float to Integer conversions */
 /* ------------------------------------------------------------------------*/
 
-#ifndef MRB_WITHOUT_FLOAT
+#ifndef MRB_NO_FLOAT
 /* 15.2.9.3.8 Float#ceil */
 static mrb_value
 float_ceil(mrb_state *mrb, mrb_value self)
@@ -3145,7 +3158,7 @@ fixnum_to_big(mrb_state *mrb, mrb_value self)
   mrb_value out;
 
   mpz_init(num);
-  int64_to_bignum(num, mrb_fixnum(self));
+  int64_to_bignum(num, mrb_integer(self));
   out = new_bignum(mrb, num, FALSE);
   mpz_clear(num);
   return out;
@@ -3157,7 +3170,7 @@ bignum_to_big(mrb_state *mrb, mrb_value self)
   return self;
 }
 
-#ifndef MRB_WITHOUT_FLOAT
+#ifndef MRB_NO_FLOAT
 static mrb_value
 float_to_big(mrb_state *mrb, mrb_value self)
 {
@@ -3213,15 +3226,15 @@ fixnum_coerce(mrb_state *mrb, mrb_value self)
     mrb_ary_set(mrb, pair, 0, other);
     mrb_ary_set(mrb, pair, 1, fixnum_to_big(mrb, self));
     break;
-#ifndef MRB_WITHOUT_FLOAT
+#ifndef MRB_NO_FLOAT
   case num_float:
     /* Fixnum.coerce(Float) */
     mrb_ary_set(mrb, pair, 0, other);
-    mrb_ary_set(mrb, pair, 1, mrb_float_value(mrb, mrb_fixnum(self)));
+    mrb_ary_set(mrb, pair, 1, mrb_float_value(mrb, mrb_integer(self)));
     break;
 #endif
   default:
-#ifndef MRB_WITHOUT_FLOAT
+#ifndef MRB_NO_FLOAT
     {
       mrb_value fltother;
 
@@ -3233,7 +3246,7 @@ fixnum_coerce(mrb_state *mrb, mrb_value self)
         goto coerce_fail;
       }
       mrb_ary_set(mrb, pair, 0, fltother);
-      mrb_ary_set(mrb, pair, 1, mrb_float_value(mrb, mrb_fixnum(self)));
+      mrb_ary_set(mrb, pair, 1, mrb_float_value(mrb, mrb_integer(self)));
     }
     break;
 #else
@@ -3268,7 +3281,7 @@ bignum_coerce(mrb_state *mrb, mrb_value self)
     mrb_ary_set(mrb, pair, 0, other);
     mrb_ary_set(mrb, pair, 1, self);
     break;
-#ifndef MRB_WITHOUT_FLOAT
+#ifndef MRB_NO_FLOAT
   case num_float:
     /* Bignum.coerce(Float) */
     mrb_ary_set(mrb, pair, 0, other);
@@ -3276,7 +3289,7 @@ bignum_coerce(mrb_state *mrb, mrb_value self)
     break;
 #endif
   default:
-#ifndef MRB_WITHOUT_FLOAT
+#ifndef MRB_NO_FLOAT
     {
       mrb_float fltself = mpz_get_d(MPZ(self));
       mrb_value fltother;
@@ -3308,9 +3321,14 @@ coerce_fail:
 void
 mrb_mruby_gmp_bignum_gem_init(mrb_state *mrb)
 {
+#if MRUBY_RELEASE_MAJOR >= 3
+  struct RClass *integer = mrb->integer_class;
+  struct RClass *fixnum  = integer;
+#else
   struct RClass *integer = mrb_class_get(mrb, "Integer");
   struct RClass *fixnum  = mrb->fixnum_class;
-#ifndef MRB_WITHOUT_FLOAT
+#endif
+#ifndef MRB_NO_FLOAT
   struct RClass *rfloat  = mrb->float_class;
 #endif
   struct RClass *string  = mrb->string_class;
@@ -3339,7 +3357,7 @@ mrb_mruby_gmp_bignum_gem_init(mrb_state *mrb)
   mrb_define_method(mrb, fixnum, "to_big",   fixnum_to_big, MRB_ARGS_NONE());
   mrb_define_method(mrb, fixnum, "to_fix",   fixnum_to_fix, MRB_ARGS_NONE());
   mrb_define_method(mrb, fixnum, "divmod",   fixnum_divmod, MRB_ARGS_REQ(1));
-#ifndef MRB_WITHOUT_FLOAT
+#ifndef MRB_NO_FLOAT
   mrb_define_method(mrb, fixnum, "quo",      fixnum_quo,    MRB_ARGS_REQ(1));
 #endif
   mrb_define_method(mrb, fixnum, "**",       fixnum_pow,    MRB_ARGS_REQ(1));
@@ -3365,7 +3383,7 @@ mrb_mruby_gmp_bignum_gem_init(mrb_state *mrb)
   mrb_define_method(mrb, bignum, ">>",       bignum_rshift, MRB_ARGS_REQ(1)); /* 15.2.8.3.13 */
   mrb_define_method(mrb, bignum, "eql?",     bignum_eql,    MRB_ARGS_REQ(1)); /* 15.2.8.3.16 */
   mrb_define_method(mrb, bignum, "hash",     bignum_hash,   MRB_ARGS_NONE()); /* 15.2.8.3.18 */
-#ifndef MRB_WITHOUT_FLOAT
+#ifndef MRB_NO_FLOAT
   mrb_define_method(mrb, bignum, "to_f",     bignum_to_f,   MRB_ARGS_NONE()); /* 15.2.8.3.23 */
 #endif
   mrb_define_method(mrb, bignum, "to_s",     bignum_to_s,   MRB_ARGS_OPT(1)); /* 15.2.8.3.25 */
@@ -3373,13 +3391,13 @@ mrb_mruby_gmp_bignum_gem_init(mrb_state *mrb)
   mrb_define_method(mrb, bignum, "to_big",   bignum_to_big, MRB_ARGS_NONE());
   mrb_define_method(mrb, bignum, "to_fix",   bignum_to_fix, MRB_ARGS_NONE());
   mrb_define_method(mrb, bignum, "divmod",   bignum_divmod, MRB_ARGS_REQ(1));
-#ifndef MRB_WITHOUT_FLOAT
+#ifndef MRB_NO_FLOAT
   mrb_define_method(mrb, bignum, "quo",      bignum_quo,    MRB_ARGS_REQ(1));
 #endif
   mrb_define_method(mrb, bignum, "**",       bignum_pow,    MRB_ARGS_REQ(1));
   mrb_define_method(mrb, bignum, "coerce",   bignum_coerce, MRB_ARGS_REQ(1)); /* 15.2.7.4.4 */
 
-#ifndef MRB_WITHOUT_FLOAT
+#ifndef MRB_NO_FLOAT
   /* Redefined Float methods */
   mrb_define_method(mrb, rfloat, "<=>",      float_cmp,     MRB_ARGS_REQ(1)); /* 15.2.9.3.1  */
   mrb_define_method(mrb, rfloat, "<",        float_lt,      MRB_ARGS_REQ(1));
