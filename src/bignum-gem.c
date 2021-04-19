@@ -28,7 +28,7 @@
 #endif
 
 /* Enable default conversion to Fixnum if this is true */
-#ifdef MRB_BIGNUM_INTEGRATION
+#if MRUBY_RELEASE_MAJOR >= 3 || defined(MRB_BIGNUM_INTEGRATION)
 #define FIXNUM_CONVERT TRUE
 #else
 #define FIXNUM_CONVERT FALSE
